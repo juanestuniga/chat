@@ -39,6 +39,11 @@ username: socket.username,
 numberOfUsers: numberUsers
 });
 });
+socket.on('typing', () => {
+socket.broadcast.emit('typing', {
+username: socket.username
+});
+});
 socket.on('disconnect', () => {
 if (userStarted) {
 --numberUsers;
