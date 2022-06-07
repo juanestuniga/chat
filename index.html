@@ -1,48 +1,306 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-  <head>
-    <title>Socket.IO chat</title>
-    <style>
-      body { margin: 0; padding-bottom: 3rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-
-      #form { background: rgba(0, 0, 0, 0.15); padding: 0.25rem; position: fixed; bottom: 0; left: 0; right: 0; display: flex; height: 3rem; box-sizing: border-box; backdrop-filter: blur(10px); }
-      #input { border: none; padding: 0 1rem; flex-grow: 1; border-radius: 2rem; margin: 0.25rem; }
-      #input:focus { outline: none; }
-      #form > button { background: #333; border: none; padding: 0 1rem; margin: 0.25rem; border-radius: 3px; outline: none; color: #fff; }
-
-      #messages { list-style-type: none; margin: 0; padding: 0; }
-      #messages > li { padding: 0.5rem 1rem; }
-      #messages > li:nth-child(odd) { background: #efefef; }
-    </style>
-  </head>
-  <body>
-    <ul id="messages"></ul>
-    <form id="form" action="">
-      <input id="input" autocomplete="off" /><button>Send</button>
-    </form>
+<head>
+    <title>=Chat</title>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-
     <script>
-      var socket = io();
-
-      var messages = document.getElementById('messages');
-      var form = document.getElementById('form');
-      var input = document.getElementById('input');
-
-      form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        if (input.value) {
-          socket.emit('chat message', input.value);
-          input.value = '';
+        $(function() {
+        var win = $(window);
+        var participantInput = $('.username_input'); 
+        var messages = $('.messages'); 
+        var inputMessage = $('.input_message'); 
+        var loginPage = $('.login.page'); 
+        var chatPage = $('.chat.page'); 
+        var username;
+        var connected = false;
+        var typing = false;
+        var currentInput = participantInput.focus();
+        var socket = io();0
+        const setParticipantsMessage = (data) => {
+        var message = '';
+        if (data.numberOfUsers === 1) {
+        message += "There is 1 participant";
+        } else {
+        message += "There are " + data.numberOfUsers + " participants";
         }
-      });
-
-      socket.on('chat message', function(msg) {
-        var item = document.createElement('li');
-        item.textContent = msg;
-        messages.appendChild(item);
-        window.scrollTo(0, document.body.scrollHeight);
-      });
+        log(message);
+        }
+        const log = (message, options) => {
+        var el = $('<li>').addClass('log').text(message);
+        addMessageElement(el, options);
+        }
+        const setUsername = () => {
+        username = cleanInput(participantInput.val().trim());
+        if (username) {
+        loginPage.fadeOut();
+        chatPage.show();
+        loginPage.off('click');
+        currentInput = inputMessage.focus();
+        socket.emit('user_added', username);
+        }
+        }
+        const sendMessage = () => {
+        var message = cleanInput(inputMessage.val());
+        if (message && connected) {
+        inputMessage.val('');
+        addChatMessage({
+        username: username,
+        message: message
+        });
+        socket.emit('new_message', message);
+        }
+        }
+        const addChatMessage = (data, options) => {
+        var typingMessages = getTypingMessages(data);
+        options = options || {};
+        if (typingMessages.length !== 0) {
+        options.fade = false;
+        typingMessages.remove();
+        }
+        var usernameDiv = $('<span class="username"/>').text(data.username).css('font-weight', 'bold');
+        var messageBodyDiv = $('<span class="messageBody">').text(data.message);
+        var typingClass = data.typing ? 'typing' : '';
+        var messageDiv = $('<li class="message"/>').data('username', data.username).addClass(typingClass).append(usernameDiv, messageBodyDiv);
+        addMessageElement(messageDiv, options);
+        }
+        const addChatTyping = (data) => {
+        data.typing = true;
+        data.message = 'is typing';
+        addChatMessage(data);
+        }
+        const removeChatTyping = (data) => {
+        getTypingMessages(data).fadeOut(function () {
+        $(this).remove();
+        });
+        }
+        const addMessageElement = (el, options) => {
+        var el = $(el);
+        // Setup default options
+        if (!options) {
+        options = {};
+        }
+        if (typeof options.fade === 'undefined') {
+        options.fade = true;
+        }
+        if (typeof options.prepend === 'undefined') {
+        options.prepend = false;
+        }
+        // Apply options
+        if (options.fade) {
+        el.hide().fadeIn(150);
+        }
+        if (options.prepend) {
+        messages.prepend(el);
+        } else {
+        messages.append(el);
+        }
+        messages[0].scrollTop = messages[0].scrollHeight;
+        }
+        const cleanInput = (input) => {
+        return $('<div/>').text(input).html();
+        }
+        const updateTyping = () => {
+        if (connected) {
+        if (!typing) {
+        typing = true;
+        socket.emit('typing');
+        }
+        }
+        }
+        const getTypingMessages = (data) => {
+        return $('.typing.message').filter(function (i) {
+        return $(this).data('username') === data.username;
+        });
+        }
+        win.keydown(event => {
+        if (!(event.ctrlKey || event.metaKey || event.altKey)) {
+        currentInput.focus();
+        }
+        // When you hit enter
+        if (event.which === 13) {
+        if (username) {
+        sendMessage();
+        socket.emit('typing_stop');
+        typing = false;
+        } else {
+        setUsername();
+        }
+        }
+        });
+        inputMessage.on('input', () => {
+        updateTyping();
+        });
+        loginPage.click(() => {
+        currentInput.focus();
+        });
+        inputMessage.click(() => {
+        inputMessage.focus();
+        });
+        socket.on('login', (data) => {
+        connected = true;
+        var message = "Welcome";
+        log(message, {
+        prepend: true
+        });
+        setParticipantsMessage(data);
+        });
+        socket.on('new_message', (data) => {
+        addChatMessage(data);
+        });
+        socket.on('user_joined', (data) => {
+        log(data.username + ' joined');
+        setParticipantsMessage(data);
+        });
+        socket.on('user_left', (data) => {
+        log(data.username + ' left');
+        setParticipantsMessage(data);
+        removeChatTyping(data);
+        });
+        socket.on('typing', (data) => {
+        addChatTyping(data);
+        });
+        socket.on('typing_stop', (data) => {
+        removeChatTyping(data);
+        });
+        socket.on('disconnect', () => {
+        log('You have been disconnected');
+        });
+        socket.on('reconnect', () => {
+        log('You have been reconnected');
+        if (username) {
+        socket.emit('user_added', username);
+        }
+        });
+        socket.on('reconnect_error', () => {
+        log('Attempt to reconnect has failed');
+        });
+        });
     </script>
-  </body>
+
+    <style>* { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font: 13px Helvetica, Arial; }
+         
+        ul {
+          list-style: none;
+          word-wrap: break-word;
+        }
+         
+        .log {
+            color: gray;
+        }
+         
+        .pages {
+          height: 100%;
+          /*margin: 0;
+          padding: 0;*/
+          width: 100%;
+        }
+         
+        .page {
+          height: 100%;
+          position: absolute;
+          width: 100%;
+        }
+         
+        .login.page {
+          background-color: #000;
+        }
+         
+        .login.page .form {
+          height: 100px;
+          margin-top: -100px;
+          position: absolute;
+         
+          text-align: center;
+          top: 50%;
+          width: 100%;
+        }
+         
+        .login.page .form .username_input {
+          background-color: transparent;
+          border: none;
+          border-bottom: 2px solid #fff;
+          outline: none;
+          padding-bottom: 15px;
+          text-align: center;
+          width: 400px;
+        }
+         
+        .login.page .title {
+          font-size: 200%;
+        }
+         
+        .login.page .username_input {
+          font-size: 200%;
+          letter-spacing: 3px;
+        }
+         
+        .login.page .title, .login.page .username_input {
+          color: #fff;
+          font-weight: 100;
+        }
+         
+        .chat.page {
+          display: none;
+        }
+         
+        .input_message {
+          font-size: 100%;
+        }
+         
+        .chat_area {
+          height: 100%;
+          padding-bottom: 60px;
+        }
+         
+        .messages {
+          height: 100%;
+          margin: 0;
+          font-size: 150%;
+          overflow-y: scroll;
+          padding: 10px 20px 10px 20px;
+        }
+         
+        .message.typing .message_body {
+          color: gray;
+        }
+         
+        .username {
+          font-weight: 700;
+          overflow: hidden;
+          padding-right: 15px;
+          text-align: right;
+        }
+         
+        .input_message {
+          border: 10px solid #000;
+          bottom: 0;
+          height: 60px;
+          left: 0;
+          outline: none;
+          padding-left: 10px;
+          position: absolute;
+          right: 0;
+          width: 100%;
+        }
+        </style>
+</head>
+<body>
+    <ul class="pages">
+        <li class="chat page">
+          <div class="chat_area">
+            <ul class="messages"></ul>
+          </div>
+          <input class="input_message" placeholder="Type here..."/>
+        </li>
+        <li class="login page">
+          <div class="form">
+            <h3 class="title">What's your name?</h3>
+            <input class="username_input" type="text" maxlength="14" />
+          </div>
+        </li>
+    </ul>
+   
+</body>
 </html>
