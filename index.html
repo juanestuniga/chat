@@ -76,7 +76,6 @@
         }
         const addMessageElement = (el, options) => {
         var el = $(el);
-        // Setup default options
         if (!options) {
         options = {};
         }
@@ -86,7 +85,6 @@
         if (typeof options.prepend === 'undefined') {
         options.prepend = false;
         }
-        // Apply options
         if (options.fade) {
         el.hide().fadeIn(150);
         }
@@ -177,7 +175,7 @@
         });
         });
     </script>
-
+<!-- style -->
     <style>* { margin: 0; padding: 0; box-sizing: border-box; }
         body { font: 13px Helvetica, Arial; }
          
